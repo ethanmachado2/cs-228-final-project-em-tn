@@ -39,46 +39,75 @@ Notes:
   skips downloading it.
 - An existing directory does not guarantee a complete dataset.
 """
-
 from pathlib import Path
+import shutil
 import subprocess
+import tempfile
 
-# Dataset information
 DATASET = "ruizgara/socofing"
-
-# Project root directory
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-
-# Local dataset directory
 DATA_DIR = PROJECT_ROOT / "data" / "raw"
-DATASET_DIR = DATA_DIR / "SOCOFing"
 
 
 def download_dataset():
-    # Check whether dataset already exists
-    if DATASET_DIR.exists():
-        print("SOCOFing dataset already exists. Skipping download.")
+    real_dir = DATA_DIR / "Real"
+    altered_dir = DATA_DIR / "Altered"
+
+    if real_dir.is_dir() and altered_dir.is_dir():
+        print("Dataset already exists. Skipping download.")
         return
 
-    # Create local directory
+    if real_dir.exists() or altered_dir.exists():
+        raise RuntimeError(
+            "Incomplete dataset found. Check data/raw/ "
+            "before downloading again."
+        )
+
     DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-    print("Downloading SOCOFing dataset...")
+    with tempfile.TemporaryDirectory(prefix="socofing_") as temp:
+        temp_dir = Path(temp)
 
-    # Download using Kaggle CLI
-    subprocess.run(
-        [
-            "kaggle",
-            "datasets",
-            "download",
-            "-d", DATASET,
-            "-p", str(DATA_DIR),
-            "--unzip"
-        ],
-        check=True
-    )
+        subprocess.run(
+            [
+                "kaggle", "datasets", "download",
+                "-d", DATASET,
+                "-p", str(temp_dir),
+                "--unzip",
+            ],
+            check=True,
+        )
 
-    print("Download completed successfully.")
+        # Find folders containing both Real and Altered.
+        candidates = sorted(
+            {
+                path.parent
+                for path in temp_dir.rglob("Real")
+                if path.is_dir()
+                and (path.parent / "Altered").is_dir()
+            },
+            key=lambda path: (
+                len(path.relative_to(temp_dir).parts),
+                str(path),
+            ),
+        )
+
+        if not candidates:
+            raise RuntimeError(
+                "Download did not contain the expected "
+                "Real and Altered folders."
+            )
+
+        # Select one copy, even if the archive contains several.
+        source = candidates[0]
+
+        for name in ("Real", "Altered"):
+            shutil.move(
+                str(source / name),
+                str(DATA_DIR / name),
+            )
+
+    print("Dataset ready in data/raw/Real and data/raw/Altered.")
 
 
 if __name__ == "__main__":

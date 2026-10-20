@@ -13,7 +13,7 @@ import pandas as pd
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
-RAW_DIR = PROJECT_ROOT / "data" / "raw" / "SOCOFing"
+RAW_DIR = PROJECT_ROOT / "data" / "raw"
 PROCESSED_DIR = PROJECT_ROOT / "data" / "processed"
 QUALITY_CSV = (
     PROJECT_ROOT / "data" / "quality_reports"

@@ -17,7 +17,7 @@ import pandas as pd
 
 # Locate the SOCOFing dataset
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-DATA_DIR = PROJECT_ROOT / "data" / "raw" / "SOCOFing"
+DATA_DIR = PROJECT_ROOT / "data" / "raw"
 
 # Save the inspection results locally
 OUTPUT_DIR = PROJECT_ROOT / "data" / "quality_reports"
