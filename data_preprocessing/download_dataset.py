@@ -29,7 +29,8 @@ Download Instructions:
        python data_preprocessing/download_dataset.py
 
 9. The dataset will be downloaded and extracted to:
-       data/raw/SOCOFing/
+       data/raw/Real/
+       data/raw/Altered/
 
 Notes:
 - The dataset is stored locally and excluded from GitHub.
