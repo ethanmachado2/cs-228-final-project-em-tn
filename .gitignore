@@ -218,3 +218,25 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Original SOCOFing dataset
+data/raw/
+
+# Preprocessed and normalized fingerprint images
+data/processed/
+
+# Standardized fingerprint images
+data/standardized/
+
+# Data quality reports and generated CSV files
+data/quality_reports/
+
+# Kaggle API credentials
+kaggle.json
+.kaggle/
+.env.*
+!.env.example
+
+# Local temporary files
+*.tmp
+*.bak

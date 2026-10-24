@@ -1,0 +1,5 @@
+Training-image brightness has a median of 147.34, with the middle 50% between 133.70 and 160.59; 903 images fall outside the 1.5-IQR fences and warrant inspection rather than automatic removal.
+
+Training-image contrast has a median of 100.84, with the middle 50% between 95.82 and 104.85; 476 images fall outside the 1.5-IQR fences and warrant inspection rather than automatic removal.
+
+Training-image sharpness has a median of 50092.06, with the middle 50% between 38253.15 and 61291.15; 67 images fall outside the 1.5-IQR fences and warrant inspection rather than automatic removal.
