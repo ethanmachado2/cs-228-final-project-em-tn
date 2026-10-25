@@ -1,0 +1,27 @@
+
+                               Welcome to NFIQ2
+
+      Please provide individual files or directories to the command line.
+            If you would like to use one of the flags listed below,
+              please include them before any standard arguments.
+
+Currently implemented flags and their functions: 
+-i [file/directory path]: Processing provided Images and Directories
+-f [batch file path]: Processing provided batch files
+-o [file path]: Saving all output to a specified file
+-j [# of threads]: Enables Multi-Threading for Batch and RecordStore processes
+-m [model info file]: Path to alternate model info file 
+-a: Displays actionable quality scores about each processed image
+-v: Displays individual quality score information about each processed image
+-b: Displays native quality measure values mapped for 39794-2 quality blocks
+-q: Displays individual quality speed timings about each processed image
+-d: Displays additional debug information as each score gets computed
+-F: Forces computation to occur. Tool does not prompt user with yes/no options
+-r: Recursive file scanning if a directory is provided
+
+Version Info
+------------
+Biometric Evaluation: 12.0
+FingerJet: 5.2.1
+OpenCV: 4.10.0
+NFIQ 2: 2.3.0 (Date: 202410010916, Commit: 76b8c4e)

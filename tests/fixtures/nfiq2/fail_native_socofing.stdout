@@ -1,0 +1,2 @@
+"Filename",FingerCode,QualityScore,"OptionalError",Quantized,Resampled,UniformImage,EmptyImageOrContrastTooLow,FingerprintImageWithMinutiae,SufficientFingerprintForeground
+"/tmp/real_native.png",0,NA,"Error: NFIQ2 computeUnifiedQualityScore returned an error code: Cannot compute Frequency Domain Analysis (FDA): Not enough data to generate histogram bins (is the image blank?)",0,0,NA,NA,NA,NA

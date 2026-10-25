@@ -1,0 +1,9 @@
+.git
+.venv
+.kiro
+.pytest_cache
+**/__pycache__
+data
+EDA
+docs
+data_preprocessing

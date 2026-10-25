@@ -1,0 +1,2 @@
+"Filename",FingerCode,QualityScore,"OptionalError",Quantized,Resampled,UniformImage,EmptyImageOrContrastTooLow,FingerprintImageWithMinutiae,SufficientFingerprintForeground
+"/tmp/does_not_exist.png",0,NA,"Error: Could not obtain data from path : ObjectDoesNotExist",0,0,NA,NA,NA,NA

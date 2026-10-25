@@ -1,0 +1,100 @@
+# fpv pipeline configuration, schema v1 (PROVISIONAL).
+# Every value below except `provenance` is hashed into config_set_id; changing anything changes the id.
+# The attempts, minutiae_min and nfiq2_min were set from the Task 5 characterization study:
+#   data/quality_reports/characterization/summary.md (scripts/characterize.py --n 200 --seed 42).
+# bozorth3_match 40 is provisional. Task 12 calibrated this config (cs_64b26a53f92a) on train +
+# validation and froze configs/pipeline.v1.frozen.yaml (bozorth3_match 43 at FMR 0.01), which the
+# CLI uses by default; see data/quality_reports/calibration/cs_64b26a53f92a/calibration.md.
+# Comments are not hashed, so this note does not change config_set_id.
+schema_version: 1
+frozen: false
+
+thresholds:
+  # Raw NFIQ 2 gate on the 3x-upscaled score (0-100). Task 5: 5 passes 99.1% of the study sample
+  # (rejecting only scores 0-4); 10 would reject 2.8% (5.0% of Altered-Hard). Re-swept in Task 12.
+  nfiq2_min: 5
+  # Adapted (.xyt, deduplicated) minutiae floor, >= Bozorth3's 10. Task 5: with the attempts below
+  # 99.9% of samples reach 12 on attempt 1 and 100% by attempt 2 (median 32 at attempt 1).
+  minutiae_min: 12
+  bozorth3_match: 40    # Bozorth3 score >= this => MATCH
+
+session:
+  max_presentations: 3  # counting the first sample
+
+quality:
+  # Fixed bicubic upscale applied to every image right before NFIQ 2 (raw quality_before and
+  # quality_after). NFIQ 2 cannot score native 96x103 SOCOFing images (Task 1 spike: FDA error).
+  # Allowed 1.0-4.0. Task 5 compared 2x: median raw score 41 at 3x vs 25 at 2x, none unscorable
+  # at either; 3x keeps the gate away from the floor, so 3x stays.
+  nfiq2_upscale: 3.0
+
+preprocess:
+  max_attempts: 3
+  # Every attempt starts from the raw sample: bicubic `resample` (the result is treated as a native
+  # 500 ppi image), optional CLAHE, then a bicubic `upscale` with pyfing told dpi = 500 * upscale.
+  # scale_factor = resample * upscale is undone by the adapter. attempt_no must be 1..n in order.
+  # XSFFE and GBFEN only support 500 dpi (upscale 1.0; resample is fine). Each attempt's fields
+  # (with defaults filled in), the adapter version and the tool pins are hashed into its
+  # configuration_id.
+  #
+  # Task 5 characterization (data/quality_reports/characterization/summary.md):
+  # SOCOFing ridges are ~3-6 px apart, so at the native size, or with an upscale that pyfing
+  # undoes via dpi, SBMEX finds a median of 0-1 minutiae and only 0.5% of samples reach
+  # minutiae_min. Lowering minimum_background_distance (4/6/8) at 1x or a 2x dpi upscale does not
+  # help (0.5% / 0%). A 3x resample treated as 500 ppi gives 9 px-like ridges and a median of 32
+  # (traditional) / 24 (deep) deduplicated minutiae; 2x is not enough (55-56% reach 12).
+  # Attempt 3 is the deep chain plus CLAHE with minimum_background_distance 4: alone it brings
+  # 100% of samples to 12 minutiae (median 29), and it is the best deep third attempt at a
+  # stricter 20-minutiae floor (99.0% cumulative vs 98.4% at MBD 6-10).
+  attempts:
+    - attempt_no: 1
+      name: traditional
+      segmentation: GMFS
+      orientation: GBFOE
+      frequency: XSFFE
+      enhancement: GBFEN
+      resample: 3.0
+    - attempt_no: 2
+      name: deep
+      segmentation: SUFS
+      orientation: SNFOE
+      frequency: SNFFE
+      enhancement: SNFEN
+      resample: 3.0
+    - attempt_no: 3
+      name: deep_boost
+      segmentation: SUFS
+      orientation: SNFOE
+      frequency: SNFFE
+      enhancement: SNFEN
+      resample: 3.0
+      clahe: {clip_limit: 2.0, tile: 8}
+      sbmex_overrides: {minimum_background_distance: 4}
+adapter:
+  version: xyt-adapter/1
+
+evaluation:
+  seed: 42
+  impostors_per_probe: 5
+
+calibration:
+  target_fmrs: [0.001, 0.01]
+  primary_target_fmr: 0.01
+
+# Pinned tool and library versions. `fpv doctor` fails if the runtime differs.
+tools:
+  nfiq2: "2.3.0"
+  nbis: "5.0.0"
+  pyfing: "0.7.3"
+  tensorflow: "2.21.0"
+  keras: "3.15.1"
+  opencv: "5.0.0"
+
+paths:
+  raw: data/raw
+  splits: data/processed/dataset_splits.csv
+  exclusions: data/quality_reports/duplicate_exclusions.csv
+  templates: data/templates
+  probes: data/probes
+  db: data/db/fpv.sqlite
+  reports: data/quality_reports

@@ -1,0 +1,223 @@
+# Implementation Plan: Fingerprint Pipeline Baseline (Phase 1)
+
+Each task is incremental and test-driven: write the listed tests first, implement until they pass, then wire the module into the `fpv` CLI so nothing is orphaned. Run unit tests on the host or in the container, and `toolchain`/`dataset` tests in the container (`docker compose run --rm fpv pytest ...`).
+
+- [x] 1. Toolchain container, package scaffold and configuration loader
+  - Guidance:
+    - Write `docker/Dockerfile` as two stages:
+      - `nbis-builder`: fetch the official NIST NBIS 5.0.0 source with a pinned URL and SHA-256, and build Bozorth3 plus its library dependencies with `CFLAGS=-fcommon`.
+      - `runtime`: start from `ubuntu:24.04`, install the NFIQ 2 v2.3.0 ubuntu24 .deb selected by `TARGETARCH`, then Python 3.12 in a venv with exact pins for `pyfing==0.7.3`, TensorFlow/Keras 3, `opencv-contrib-python-headless`, numpy, pandas, pyyaml, matplotlib and pytest. Use a non-root user and a `GIT_COMMIT` build arg.
+    - Write `docker-compose.yml` with service `fpv` and `network_mode: "none"`. Mount `data/raw` and `data/processed` read-only, and `data/quality_reports`, `data/templates`, `data/db` and `data/probes` read-write. Add dev bind mounts for `src`, `tests`, `configs` and `scripts`.
+    - In `requirements.txt`, replace `opencv-python-headless` with `opencv-contrib-python-headless`. Add `requirements-pipeline.lock` for the container.
+    - Add `.gitignore` entries for `data/templates/`, `data/db/` and `data/probes/`.
+    - Add `pyproject.toml` with the src-layout package `fpv`, console script `fpv`, and pytest markers `toolchain` and `dataset`. Add a `tests/conftest.py` that auto-skips marked tests when the binaries or data are missing.
+    - Add `src/fpv/types.py` (Hand, Finger, Identity, Status) and `src/fpv/config.py`: YAML load and validation, `canonical_json`, `config_set_id` and `pipeline_version`.
+    - Add `configs/pipeline.v1.yaml` with the provisional values from the design. Leave the attempts list for Task 4.
+    - Add `src/fpv/cli.py` with argparse, a global `--config` flag, and the `fpv doctor` subcommand. `doctor` reports tool and library versions and checks for `cv.ximgproc`.
+    - Spike: record the exact `nfiq2` CLI flags for actionable feedback and CSV output, and confirm that Bozorth3's default `.xyt` convention self-matches a hand-written template. Write the findings into the design's Open Decisions.
+  - Tests:
+    - Unit: `Identity.parse` accepts valid values, normalizes case, and rejects user 0 and 601, bad hands and bad fingers.
+    - Unit: config validation rejects each out-of-range threshold. `config_set_id` is stable for the same config and changes on any edit.
+    - Unit: `pipeline_version` format, covering the `.dirty` and `+unknown` cases.
+    - `toolchain` smoke tests: `nfiq2` runs, `bozorth3` prints usage, `import pyfing` works, `cv.ximgproc` exists, SUFS weights load, and `fpv doctor` exits 0.
+  - Demo: `docker compose run --rm fpv pytest -m toolchain` passes, `docker compose run --rm fpv fpv doctor` prints all versions, and `docker compose run --rm fpv nfiq2 <a SOCOFing image>` prints a score.
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 12.1, 12.2, 12.4, 12.5, 12.6_
+
+- [x] 2. Dataset catalog and image I/O
+  - Guidance:
+    - Write `src/fpv/catalog.py`:
+      - `parse_label`, reusing the `validate_labels.py` regex with `IGNORECASE` for `.BMP`. Difficulty comes from the parent directory, and inconsistent directory/alteration pairs return `None`.
+      - `Catalog.load` reads `dataset_splits.csv` and `duplicate_exclusions.csv`.
+      - `Catalog.record` computes SHA-256, dimensions and the `sample_id` (`"s_" + sha256(f"{sha256}:{source_path}")[:16]`).
+      - `iter_samples(split, real=...)`.
+    - Write `src/fpv/imaging.py`: `load_gray8` (raises `InputImageError`), `clahe`, `resize`, `invert`, `apply_mask`, `temp_png`, `png_bytes` and `from_png_bytes`.
+    - Register `fpv catalog <path>`.
+  - Tests:
+    - Unit: label parsing for Real, Obl, CR and Zcut across all three difficulty directories. Malformed names and inconsistent directories return `None`. Extension matching is case-insensitive.
+    - Unit: exclusion and split lookup against small synthetic CSV fixtures. `sample_id` differs for identical bytes at different paths.
+    - Unit: `load_gray8` returns 2-D `uint8` at the original size and raises on a non-image file. The PNG round trip is lossless. `resize(…, 1.0)` is an identity.
+    - `dataset`: one real Real sample and one Altered-Hard sample resolve to the expected labels and split.
+  - Demo: `fpv catalog data/raw/Altered/Altered-Easy/100__M_Left_index_finger_CR.BMP` prints subject 100, Left, index, CR, Easy and its split.
+  - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7_
+
+- [x] 3. Quality module (NFIQ 2)
+  - Guidance:
+    - Write `src/fpv/quality.py` with `QualityResult`, `GateDecision`, `QualityToolError`, `assess_quality` and `quality_gate`, following the design contracts.
+    - Write the image with `temp_png`, invoke `nfiq2` with an argument list and `shell=False`, apply a timeout, and inject the `runner`.
+    - Parse the score and actionable feedback in one function, tested against captured output fixtures saved under `tests/fixtures/nfiq2/` during the Task 1 spike.
+    - A "cannot compute" result returns `score=None`. A missing binary, timeout or signal raises `QualityToolError`.
+    - Read `nfiq2_min` from the config.
+    - Register `fpv quality <image>`.
+  - Tests:
+    - Unit with a mocked runner: parse a normal output, parse a failure output into `score=None`, and raise `QualityToolError` on `FileNotFoundError`, timeout and non-zero exit.
+    - Unit: the gate passes at `score == threshold`, fails at `threshold - 1`, and fails with reason `nfiq2_failed` on `None`.
+    - Unit: `runner` receives a list argument and no `shell=True`.
+    - `toolchain`: an all-white blank image produces `score=None` without crashing.
+    - `toolchain` + `dataset`: a Real sample returns a score from 0 to 100 with non-empty feedback.
+  - Demo: `fpv quality <Real sample>` prints the score, the feedback and `PASS`, and `fpv quality <blank.png>` prints `FAIL (nfiq2_failed)`.
+  - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.8, 12.1_
+
+- [x] 4. Preprocessing module (pyfing chain and attempt configs)
+  - Guidance:
+    - Write `src/fpv/preprocess.py` with `ClaheConfig`, `AttemptConfig`, `PreprocessResult`, `preprocess` and `quality_after`, following the design contracts.
+    - Add the three attempt definitions to `configs/pipeline.v1.yaml` and parse them into frozen `AttemptConfig`s in `config.py`.
+    - Implement the `configuration_id` computation (attempt, adapter version and tools) in `config.py`.
+    - Every attempt starts from the raw image, applying optional CLAHE and then the upscale, and passes `dpi = 500 * upscale` to pyfing.
+    - Cache pyfing algorithm instances per process. Enable Keras/TF determinism and run CPU-only.
+    - `quality_after` inverts and masks the enhanced image, resizes it back to 500 ppi, and calls `assess_quality`. A `None` score is allowed.
+    - Register `fpv preprocess <image> --attempt k --out enhanced.png`.
+  - Tests:
+    - Unit: `configuration_id` is identical for equal configs and changes when any single field, the adapter version or a tool version changes.
+    - Unit: config parsing rejects an unknown method name and an `attempt_no` sequence that isn't 1..n.
+    - `toolchain` (pyfing available): on a synthetic grating image, every attempt returns `enhanced` and `mask` with shape `original × upscale`, dtype `uint8`, and a mask containing only {0, 255}.
+    - `toolchain`: two calls with the same input and attempt return byte-identical arrays.
+    - `toolchain`: `quality_after` returns a `QualityResult`, and its scored image is 500 ppi-sized.
+  - Demo: `fpv preprocess <Altered-Medium sample> --attempt 2 --out /tmp/enh.png` writes the enhanced image and prints `quality_after` and the `configuration_id`.
+  - _Requirements: 5.1, 5.2, 5.5, 5.6, 5.7, 5.8, 5.9, 5.10, 12.3, 12.5, 15.1_
+
+- [x] 5. Extraction module and characterization study
+  - Guidance:
+    - Write `src/fpv/extract.py` with `ExtractionResult` and `extract(pre)`. It uses SBMEX on the enhanced image and mask, with `sbmex_overrides` merged over the defaults and cached per overrides key. Never import LEADER.
+    - Add `scripts/characterize.py`. With a fixed seed it samples about 200 train-split fingers, then for Real and each Altered level runs NFIQ 2 on the raw image, runs every attempt, and records `quality_after`, raw minutiae counts and per-stage timings.
+    - The study adds variants comparing a 2× upscale with the default `minimum_background_distance` against no upscale with reduced values (for example 4, 6 and 8).
+    - Output goes to `data/quality_reports/characterization/` as `characterization.csv` and `summary.md`, showing gate pass rates per attempt and cumulatively.
+    - Update `configs/pipeline.v1.yaml` (the attempt 3 parameters and `minutiae_min`) with a comment citing the report.
+  - Tests:
+    - `toolchain`: extraction on a synthetic grating with a known break returns minutiae whose coordinates all lie inside the mask, with directions in [-π, π].
+    - Unit: `sbmex_overrides` are applied, verified by asserting the constructed parameters through a small seam.
+    - `toolchain`: two runs produce identical minutiae.
+    - `dataset` + `toolchain`: a Real sample yields more than 0 minutiae on at least one attempt.
+    - Unit: the characterization summary aggregation over a tiny fake results table.
+  - Demo: `python scripts/characterize.py --n 200 --seed 42` produces `summary.md`, and the updated `pipeline.v1.yaml` cites it.
+  - _Requirements: 6.1, 6.2, 6.4, 6.5, 5.2_
+
+- [x] 6. Template adapter (`.xyt`)
+  - Guidance:
+    - Write `src/fpv/adapter.py` with `ADAPTER_VERSION`, `XytMinutia`, `XytTemplate`, `to_xyt`, `write_xyt` (atomic via tmp file and `os.replace`) and `read_xyt`.
+    - Use half-up rounding (`floor(v + 0.5)`), clip to the original bounds, dedup by highest quality and then lowest θ, and sort by `(y', x', θ)`.
+    - Add a shared helper `acquire_template(image, config, stages)` that runs the attempt loop (preprocess, then quality_after, then extract, then adapt) and gates on the adapted count. The controller (Task 9) and `fpv extract` both reuse it, which keeps the policy in one place.
+    - Register `fpv extract <image> --out probe.xyt`.
+  - Tests:
+    - Unit, hand-computed: on a 103-px-tall image, (x=10, y=0) becomes y'=102 and (x=10, y=102) becomes y'=0. Direction 0 gives θ=0, π/2 gives 90, -π/2 gives 270, and 359.6° gives θ=0.
+    - Unit: unscaling at s=2 ((21, 41) on a 206-high image maps to the expected point), plus clipping at the borders.
+    - Unit: dedup keeps the highest quality, and ties take the lower θ. Ordering is deterministic. Quality 0.0 maps to 0, 1.0 to 100, and 1.2 clamps to 100.
+    - Unit, rotation property: seeded random minutiae rotated by φ ∈ {0, 15, …, 345}° shift every θ by φ mod 360 (±1° rounding tolerance).
+    - Unit: the write/read round trip is identical, and a corrupt line raises a parse error.
+    - Unit, attempt loop with fake stages: stops at the first attempt that reaches `minutiae_min`, and returns a rejection after `max_attempts`.
+  - Demo: `fpv extract <Real sample> --out /tmp/probe.xyt` writes a file of `x y theta q` lines and prints the count and the `configuration_id` used.
+  - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 6.3, 6.6, 5.3, 5.4_
+
+- [x] 7. Matcher module (Bozorth3)
+  - Guidance:
+    - Write `src/fpv/matcher.py` with `MatchResult`, `InsufficientMinutiae`, `MatcherError`, `match` and `decide`.
+    - Before invoking Bozorth3, read both templates and check counts against 10.
+    - Invoke `[bozorth3, probe, gallery]` with an argument list, a timeout and an injected runner, and parse a single integer from stdout.
+    - Register `fpv match probe.xyt gallery.xyt`.
+  - Tests:
+    - Unit with a mocked runner: parse a score, and raise `MatcherError` on non-zero exit, timeout, missing binary and non-integer output. `InsufficientMinutiae` is raised with the correct `which` when either side has fewer than 10 minutiae.
+    - Unit: `decide` at `threshold` gives MATCH and at `threshold - 1` gives NO_MATCH.
+    - `toolchain`: a synthetic template self-matches far above 40, and two unrelated random templates score low.
+    - `dataset` + `toolchain`: the full chain (Tasks 3–6) on a Real sample versus its Altered-Easy variant scores higher than against a different subject's same finger.
+  - Demo: `fpv match /tmp/probe.xyt /tmp/gallery.xyt` prints the score and `MATCH` or `NO_MATCH` against `bozorth3_match`.
+  - _Requirements: 9.3, 9.4, 9.5, 9.6, 9.7, 9.11_
+
+- [x] 8. Storage layer (SQLite and artifacts)
+  - Guidance:
+    - Write `src/fpv/migrations/0001_init.sql` with the design schema, including the partial unique index for the active template.
+    - Write `src/fpv/storage.py` with `Repository`: WAL, `foreign_keys=ON`, and parameterized SQL only.
+    - Methods: `migrate`, `upsert_sample`, `start_run`, `finish_run`, `log_stage_event`, `enroll_template` (a single `BEGIN IMMEDIATE` transaction with atomic file write; on failure it rolls back and unlinks), `get_active_template`, `list_templates`, `write_probe` and `record_verification`.
+    - Artifact paths are `data/templates/<user>/<hand>_<finger>/v<n>.xyt` and `data/probes/<run_id>.xyt`.
+    - Add a hidden `fpv db templates --user --hand --finger` listing command.
+  - Tests (all on a temporary DB and directory):
+    - Migrations are idempotent.
+    - Enrolling twice gives versions 1 and 2, with only v2 active and v1 retained and its file still present.
+    - A direct second active insert violates the partial unique index.
+    - `get_active_template` returns `None` for an unknown identity.
+    - Every required metadata field round-trips, and `quality_after` JSON parses into per-attempt entries.
+    - An injected failure after the file write leaves no new row, no new file, and v1 still active.
+    - Inserting a stage event for an unknown run fails because of the foreign key.
+    - No pixel data columns exist.
+  - Demo: `python -m fpv.storage --demo` (or a pytest-backed script) enrolls a fake template twice for user 1 Left index, and `fpv db templates --user 1 --hand Left --finger index` lists v1 inactive and v2 active.
+  - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 9.1, 9.8, 10.5, 11.1, 11.2, 11.3, 11.6_
+
+- [x] 9. Pipeline controller (`enroll` and `verify`)
+  - Guidance:
+    - Write `src/fpv/pipeline.py`:
+      - The `Stages` protocol, plus `LocalStages`, which delegates to the Tasks 3–7 modules.
+      - The `AttemptRecord`, `EnrollmentOutcome` and `VerificationOutcome` types.
+      - `PipelineController.enroll` and `PipelineController.verify`, both using a shared `_acquire` (the quality gate, then `acquire_template` from Task 6).
+    - `_stage` is a context manager that writes timed `stage_events` (monotonic clock, UTC `started_at`, a `seq` counter) and records `error` events with the exception type.
+    - Map errors per the design's Error Handling table, and always finish the run with `ended_at`.
+    - Verification stores the probe, looks up the active template (returning NOT_ENROLLED if there is none), matches, decides, and records the verification with `ground_truth_genuine` from the catalog (`None` when unlabeled). Labels are never used in decisions.
+    - Runs record `control_mode='controller'`, `orchestrator_vision='off'`, `pipeline_version` and `config_set_id`.
+    - Add an optional `probe_cache` hook (unused until Task 11).
+    - Do not prompt or print.
+  - Tests:
+    - Unit with fake `Stages` and a temporary repo, one test per branch:
+      - Raw quality below the threshold gives REJECTED_QUALITY.
+      - NFIQ 2 failure gives REJECTED_QUALITY with reason `nfiq2_failed`.
+      - A quality tool error gives ERROR.
+      - Attempt 1 short and attempt 2 OK gives ENROLLED with 2 attempt records.
+      - All attempts short gives REJECTED_MINUTIAE.
+      - Verifying an identity with no template gives NOT_ENROLLED.
+      - A score at or above the threshold gives MATCH, and below gives NO_MATCH.
+      - A probe under 10 minutiae at match gives REJECTED_MINUTIAE.
+      - A matcher error gives ERROR.
+      - A persist failure gives ERROR with the old template still active.
+    - Unit: the stage event sequence and stage names per branch. Every run has `ended_at`. `quality_after` is stored per attempt in the template.
+    - Unit: `ground_truth_genuine` is true for the same identity, false for a different one, and null for an unlabeled path. Swapping labels doesn't change the decision.
+    - `dataset` + `toolchain`: enroll `Real/1__M_Left_index_finger.BMP`, verify `Altered-Easy/1__M_Left_index_finger_CR.BMP` and get MATCH, then verify a different subject's same finger and get NO_MATCH. If subject 1 is excluded, substitute the first non-excluded subject.
+  - Demo: a short Python snippet (`python -m fpv.pipeline --demo`) enrolls the Real image, verifies the `_CR` variant, and prints `MATCH` with the ordered stage event trail and durations.
+  - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.7, 5.1, 5.3, 5.4, 5.7, 8.1, 8.6, 8.7, 9.1, 9.2, 9.3, 9.4, 9.5, 9.6, 9.8, 9.9, 9.10, 11.2, 11.3, 11.4, 11.5, 15.2_
+
+- [x] 10. Interactive CLI (`fpv enroll` / `fpv verify`)
+  - Guidance:
+    - Add `enroll` and `verify` subcommands to `src/fpv/cli.py`, with injectable `input_fn` and `output_fn`.
+    - The interactive flow prompts for the image path (re-prompting if it is missing or undecodable), then the user ID, hand and finger (re-prompting with the allowed values when invalid). It then shows the claim summary and requires `y` to proceed.
+    - The non-interactive flags `--image --user --hand --finger --yes` skip prompts. Invalid input exits with code 2 without processing.
+    - The session loop creates a `session_id` and counts presentations up to `max_presentations` (counting the first sample). On a rejection it prints the reason and asks for a new image path for the same claim. The session ends on any terminal status or when the limit is reached.
+    - Messages are `Enrollment successful (template v<n>)`, `Match`, `No match`, `Not enrolled`, plus the rejection and limit messages.
+    - Use the exit code table from the design. At startup, print the config path and `config_set_id`.
+  - Tests:
+    - Unit with a fake controller and scripted input: invalid user, hand and finger are each re-asked, and a nonexistent path is re-asked. Declining confirmation exits without a run.
+    - Unit: two rejections then success produce 3 runs, one session and a success message. Three rejections produce the limit message and exit code 22.
+    - Unit: each terminal status maps to its message and exit code. Non-interactive invalid input exits 2 without calling the controller.
+    - Unit: the frozen config is preferred when present and no `--config` is given (completed in Task 12).
+  - Demo: in the container, `fpv enroll` interactively with a Real image prints `Enrollment successful (template v1)`. `fpv verify --image <same finger Altered-Easy> --user … --hand … --finger … --yes` prints `Match`, and verifying with another subject's image prints `No match`.
+  - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 8.7, 9.2, 9.4, 10.1, 10.2, 10.3, 10.4, 10.5_
+
+- [x] 11. Batch evaluation harness
+  - Guidance:
+    - Write `src/fpv/evaluate.py`:
+      - A pure `generate_trials(catalog, split, seed, k, subjects)` covering Real enrollments, genuine Altered probes and k seeded impostors with the same hand and finger from other subjects. It never uses Real samples as probes.
+      - Execution through `PipelineController` in a `ProcessPoolExecutor` with per-worker repositories, a `probe_cache` keyed by `(sha256, config_set_id)` that logs `cache_hit`, and output sorted by `trial_id`.
+      - Metric functions: FTE, FTA, FMR, FNMR and the generalized FMR/FNMR.
+      - A DET plot.
+      - Output under `data/quality_reports/eval/<split>/<config_set_id>/`: `scores.csv`, `summary.md` with breakdowns by alteration type and difficulty, and `det.png`.
+    - Register `fpv evaluate --split {train,validation,test} [--subjects N] [--workers W] [--seed S]`. The test split is guarded in Task 12.
+  - Tests:
+    - Unit on a synthetic catalog (3 subjects × 2 fingers): genuine and impostor sets are disjoint, impostors share hand and finger but have a different subject, there are exactly `k` impostors per probe (or all available when fewer), no Real probes appear, and the labels are correct.
+    - Unit: identical trial lists for the same seed, and different lists for different seeds.
+    - Unit: metrics match hand-computed confusion counts, including FTA in the generalized rates.
+    - Unit with a fake controller: results are identical for `workers=1` and `workers=3`, and the cache hit is logged on the second trial of the same probe.
+  - Demo: `fpv evaluate --split train --subjects 50 --workers 4` produces `scores.csv`, `summary.md` and `det.png`.
+  - _Requirements: 13.1, 13.2, 13.3, 13.4, 13.5, 13.6, 13.7, 13.8, 13.9, 2.3_
+
+- [x] 12. Threshold calibration, config freeze and test-split baseline
+  - Guidance:
+    - Write `src/fpv/calibrate.py`:
+      - Load train and validation `scores.csv` only.
+      - `threshold_at(target)` returns the smallest integer threshold with FMR at or below the target, for targets 0.001 and 0.01, with FNMR reported at each and a low-confidence flag when impostors number fewer than `10 / target`.
+      - Run sweeps of FTE and FTA across NFIQ 2 cutoffs (for example 0–30 in steps of 5) and alternative `minutiae_min` values (10–20).
+      - `freeze()` writes `configs/pipeline.v1.frozen.yaml` with `frozen: true`, the chosen thresholds, the primary operating point and provenance, and a recomputed `config_set_id`.
+    - Add the test-split guard to `fpv evaluate --split test`: require a frozen config, and refuse if `test_report_<config_set_id>.json` exists unless `--force` is given (recorded in the report).
+    - Make the CLI default to the frozen config when it is present.
+    - Write `data/quality_reports/baseline_v1.md` with test-split FMR, FNMR, FTE and FTA by alteration type and difficulty.
+  - Tests:
+    - Unit on synthetic genuine and impostor distributions: the selected threshold achieves FMR at or below the target and is minimal, and the low-confidence flag triggers on small impostor sets.
+    - Unit: test-split scores are never read when calibrating, enforced by input path filtering.
+    - Unit: the frozen YAML loads, validates, has `frozen: true`, and its `config_set_id` differs from the provisional one.
+    - Unit: the test guard refuses a non-frozen config, refuses a second run without `--force`, and allows it with `--force` while recording the override.
+    - Unit: the CLI picks the frozen config by default.
+  - Demo: `fpv calibrate` writes the calibration report and the frozen config, and `fpv evaluate --split test` produces `data/quality_reports/baseline_v1.md`.
+  - _Requirements: 14.1, 14.2, 14.3, 14.4, 14.5, 14.6, 14.7, 12.7, 3.8_

@@ -1,0 +1,46 @@
+{
+  "config_set_id": "cs_abee4830796d",
+  "config": "configs/pipeline.v1.frozen.yaml",
+  "split": "test",
+  "completed_at": "2026-10-25T19:23:32+00:00",
+  "pipeline_version": "0.1.0+g61e588a.dirty",
+  "eval_dir": "data/quality_reports/eval/test/cs_abee4830796d",
+  "forced": false,
+  "override": null,
+  "history": [],
+  "thresholds": {
+    "nfiq2_min": 5,
+    "minutiae_min": 12,
+    "bozorth3_match": 43
+  },
+  "fte": 0.011160714285714286,
+  "overall": {
+    "probes": 7360,
+    "rejected_probes": 132,
+    "fta": 0.017934782608695653,
+    "genuine": 7216,
+    "impostor": 35745,
+    "fmr": 0.010183242411526088,
+    "fnmr": 0.03921840354767184,
+    "gfmr": 0.010000608172623719,
+    "gfnmr": 0.0564498126144799,
+    "not_enrolled": 407,
+    "errors": 0
+  },
+  "operating_points": [
+    {
+      "target_fmr": 0.001,
+      "bozorth3_match": 60,
+      "fmr": 0.001370821093859281,
+      "fnmr": 0.06818181818181818
+    },
+    {
+      "target_fmr": 0.01,
+      "bozorth3_match": 43,
+      "fmr": 0.010183242411526088,
+      "fnmr": 0.03921840354767184
+    }
+  ],
+  "genuine": 7216,
+  "impostor": 35745
+}
