@@ -239,6 +239,15 @@ data/quality_reports/*
 data/quality_reports/characterization/*
 !data/quality_reports/characterization/summary.md
 !data/quality_reports/characterization/findings.md
+# Test-split DET plot and summary embedded in baseline_v1.md (scores.csv and store/ stay ignored)
+!data/quality_reports/eval/
+data/quality_reports/eval/*
+!data/quality_reports/eval/test/
+data/quality_reports/eval/test/*
+!data/quality_reports/eval/test/cs_abee4830796d/
+data/quality_reports/eval/test/cs_abee4830796d/*
+!data/quality_reports/eval/test/cs_abee4830796d/det.png
+!data/quality_reports/eval/test/cs_abee4830796d/summary.md
 
 # Kaggle API credentials
 kaggle.json

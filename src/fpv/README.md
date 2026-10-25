@@ -102,7 +102,8 @@ docker compose run --rm fpv fpv verify --image data/raw/Real/2__F_Left_index_fin
 - Enrolling the same finger again creates a new version and deactivates the old one, which is kept.
 - Templates go to `data/templates/<user>/<Hand>_<finger>/v<n>.xyt`, probes to
   `data/probes/<run_id>.xyt`, and every run with its timed stage events to `data/db/fpv.sqlite`.
-- List a finger's template versions: `fpv db templates --user 1 --hand Left --finger index`.
+- List a finger's template versions:
+  `docker compose run --rm fpv fpv db templates --user 1 --hand Left --finger index`.
 - Ground-truth labels from the filename are recorded for evaluation only. They never affect a decision.
 
 | Exit code | Meaning |
@@ -123,13 +124,15 @@ Each stage can be run on its own, which helps when a sample is rejected:
 ```bash
 docker compose run --rm fpv fpv catalog data/raw/Real/1__M_Left_index_finger.BMP     # labels, split, exclusion
 docker compose run --rm fpv fpv quality data/raw/Real/1__M_Left_index_finger.BMP     # NFIQ 2 score + feedback
-docker compose run --rm fpv fpv preprocess data/raw/Real/1__M_Left_index_finger.BMP --attempt 2 --out /tmp/enh.png
-docker compose run --rm fpv fpv extract data/raw/Real/1__M_Left_index_finger.BMP --out /tmp/probe.xyt
-docker compose run --rm fpv fpv match /tmp/probe.xyt /tmp/gallery.xyt
+docker compose run --rm fpv fpv preprocess data/raw/Real/1__M_Left_index_finger.BMP --attempt 2 --out data/probes/enh.png
+docker compose run --rm fpv fpv extract data/raw/Real/1__M_Left_index_finger.BMP --out data/probes/gallery.xyt
+docker compose run --rm fpv fpv extract data/raw/Altered/Altered-Easy/1__M_Left_index_finger_CR.BMP --out data/probes/probe.xyt
+docker compose run --rm fpv fpv match data/probes/probe.xyt data/probes/gallery.xyt
 ```
 
-`/tmp` is inside the container and disappears with `--rm`. Run several commands in one shell with
-`docker compose run --rm fpv bash` to chain `extract` and `match`.
+Each `docker compose run --rm` starts a fresh container, so write outputs under a mounted directory
+like `data/probes/` (not `/tmp`) to use them in a later command. An enrolled template under
+`data/templates/<user>/<Hand>_<finger>/v<n>.xyt` also works as the gallery.
 
 ## 6. Reproduce the baseline
 
