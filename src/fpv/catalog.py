@@ -112,6 +112,11 @@ def _truthy(value: str | None) -> bool:
     return (value or "").strip().lower() in {"true", "1", "yes"}
 
 
+def _csv_key(value: str) -> str:
+    """A CSV `file` value as a dataset key. CSVs generated on Windows use `\\` separators."""
+    return value.strip().replace("\\", "/")
+
+
 def _read_csv(path: Path, required: tuple[str, ...]) -> list[dict[str, str]]:
     try:
         with path.open(newline="", encoding="utf-8") as fh:
@@ -143,11 +148,11 @@ class Catalog:
             split = row["split"].strip()
             if not split:
                 continue
-            key = row["file"].strip()
+            key = _csv_key(row["file"])
             splits[key.lower()] = split
             split_files.setdefault(split, []).append(key)
         exclusions = {
-            row["file"].strip().lower(): _truthy(row["exclude_duplicate_conflict"])
+            _csv_key(row["file"]).lower(): _truthy(row["exclude_duplicate_conflict"])
             for row in _read_csv(Path(exclusions_csv), ("file", "exclude_duplicate_conflict"))
         }
         return cls(splits, exclusions, raw_root, {s: tuple(sorted(f)) for s, f in split_files.items()})

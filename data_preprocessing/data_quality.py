@@ -41,7 +41,7 @@ for path in image_paths:
 
     if image is None:
         records.append({
-            "file": str(path.relative_to(DATA_DIR)),
+            "file": path.relative_to(DATA_DIR).as_posix(),
             "status": "corrupt"
         })
         continue
@@ -61,7 +61,7 @@ for path in image_paths:
     )
 
     records.append({
-        "file": str(path.relative_to(DATA_DIR)),
+        "file": path.relative_to(DATA_DIR).as_posix(),
         "status": "valid",
         "width": width,
         "height": height,
