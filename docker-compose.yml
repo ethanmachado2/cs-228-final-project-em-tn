@@ -1,0 +1,32 @@
+# Phase 1 runtime. Usage:
+#   GIT_COMMIT=$(git rev-parse --short HEAD)$(git diff --quiet HEAD || echo .dirty) docker compose build
+#   docker compose run --rm fpv fpv doctor
+#   docker compose run --rm fpv pytest -m toolchain
+services:
+  fpv:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        GIT_COMMIT: ${GIT_COMMIT:-unknown}
+        UID: ${FPV_UID:-1000}
+        GID: ${FPV_GID:-1000}
+    image: fpv-toolchain:phase1
+    # No outbound network access for phase 1 workloads (Req 1.6).
+    network_mode: "none"
+    user: fpv
+    working_dir: /app
+    volumes:
+      # Dataset inputs: read-only (Req 1.5, 2.6).
+      - ./data/raw:/app/data/raw:ro
+      - ./data/processed:/app/data/processed:ro
+      # Pipeline outputs: writable.
+      - ./data/quality_reports:/app/data/quality_reports
+      - ./data/templates:/app/data/templates
+      - ./data/db:/app/data/db
+      - ./data/probes:/app/data/probes
+      # Dev bind mounts (the package is installed editable from /app/src).
+      - ./src:/app/src
+      - ./tests:/app/tests
+      - ./configs:/app/configs
+      - ./scripts:/app/scripts

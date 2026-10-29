@@ -1,0 +1,209 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "1. Toolchain container, package scaffold and configuration loader": [
+      {
+        "executionId": "4f59aecc-1cb8-4397-99b9-fd6b518510a0",
+        "chatSessionId": "sess_6e6ddce3-e03d-4e49-ad8f-2e864d77f1a6",
+        "timestamp": 1792883744065
+      },
+      {
+        "executionId": "4f59aecc-1cb8-4397-99b9-fd6b518510a0",
+        "chatSessionId": "sess_6e6ddce3-e03d-4e49-ad8f-2e864d77f1a6",
+        "timestamp": 1792883751108
+      },
+      {
+        "executionId": "4f59aecc-1cb8-4397-99b9-fd6b518510a0",
+        "chatSessionId": "sess_6e6ddce3-e03d-4e49-ad8f-2e864d77f1a6",
+        "timestamp": 1792886238771
+      }
+    ],
+    "2. Dataset catalog and image I/O": [
+      {
+        "executionId": "4f59aecc-1cb8-4397-99b9-fd6b518510a0",
+        "chatSessionId": "sess_6e6ddce3-e03d-4e49-ad8f-2e864d77f1a6",
+        "timestamp": 1792883744119
+      },
+      {
+        "executionId": "4f59aecc-1cb8-4397-99b9-fd6b518510a0",
+        "chatSessionId": "sess_6e6ddce3-e03d-4e49-ad8f-2e864d77f1a6",
+        "timestamp": 1792886242487
+      },
+      {
+        "executionId": "4f59aecc-1cb8-4397-99b9-fd6b518510a0",
+        "chatSessionId": "sess_6e6ddce3-e03d-4e49-ad8f-2e864d77f1a6",
+        "timestamp": 1792886619914
+      }
+    ],
+    "3. Quality module (NFIQ 2)": [
+      {
+        "executionId": "4f59aecc-1cb8-4397-99b9-fd6b518510a0",
+        "chatSessionId": "sess_6e6ddce3-e03d-4e49-ad8f-2e864d77f1a6",
+        "timestamp": 1792883744171
+      },
+      {
+        "executionId": "4f59aecc-1cb8-4397-99b9-fd6b518510a0",
+        "chatSessionId": "sess_6e6ddce3-e03d-4e49-ad8f-2e864d77f1a6",
+        "timestamp": 1792886876150
+      },
+      {
+        "executionId": "4f59aecc-1cb8-4397-99b9-fd6b518510a0",
+        "chatSessionId": "sess_6e6ddce3-e03d-4e49-ad8f-2e864d77f1a6",
+        "timestamp": 1792887326691
+      }
+    ],
+    "4. Preprocessing module (pyfing chain and attempt configs)": [
+      {
+        "executionId": "4f59aecc-1cb8-4397-99b9-fd6b518510a0",
+        "chatSessionId": "sess_6e6ddce3-e03d-4e49-ad8f-2e864d77f1a6",
+        "timestamp": 1792883744210
+      },
+      {
+        "executionId": "4f59aecc-1cb8-4397-99b9-fd6b518510a0",
+        "chatSessionId": "sess_6e6ddce3-e03d-4e49-ad8f-2e864d77f1a6",
+        "timestamp": 1792887328170
+      },
+      {
+        "executionId": "4f59aecc-1cb8-4397-99b9-fd6b518510a0",
+        "chatSessionId": "sess_6e6ddce3-e03d-4e49-ad8f-2e864d77f1a6",
+        "timestamp": 1792888495022
+      }
+    ],
+    "5. Extraction module and characterization study": [
+      {
+        "executionId": "4f59aecc-1cb8-4397-99b9-fd6b518510a0",
+        "chatSessionId": "sess_6e6ddce3-e03d-4e49-ad8f-2e864d77f1a6",
+        "timestamp": 1792883744251
+      },
+      {
+        "executionId": "4f59aecc-1cb8-4397-99b9-fd6b518510a0",
+        "chatSessionId": "sess_6e6ddce3-e03d-4e49-ad8f-2e864d77f1a6",
+        "timestamp": 1792888496371
+      },
+      {
+        "executionId": "4f59aecc-1cb8-4397-99b9-fd6b518510a0",
+        "chatSessionId": "sess_6e6ddce3-e03d-4e49-ad8f-2e864d77f1a6",
+        "timestamp": 1792899384039
+      }
+    ],
+    "6. Template adapter (`.xyt`)": [
+      {
+        "executionId": "4f59aecc-1cb8-4397-99b9-fd6b518510a0",
+        "chatSessionId": "sess_6e6ddce3-e03d-4e49-ad8f-2e864d77f1a6",
+        "timestamp": 1792883744294
+      },
+      {
+        "executionId": "4f59aecc-1cb8-4397-99b9-fd6b518510a0",
+        "chatSessionId": "sess_6e6ddce3-e03d-4e49-ad8f-2e864d77f1a6",
+        "timestamp": 1792899388214
+      },
+      {
+        "executionId": "4f59aecc-1cb8-4397-99b9-fd6b518510a0",
+        "chatSessionId": "sess_6e6ddce3-e03d-4e49-ad8f-2e864d77f1a6",
+        "timestamp": 1792899886962
+      }
+    ],
+    "7. Matcher module (Bozorth3)": [
+      {
+        "executionId": "4f59aecc-1cb8-4397-99b9-fd6b518510a0",
+        "chatSessionId": "sess_6e6ddce3-e03d-4e49-ad8f-2e864d77f1a6",
+        "timestamp": 1792883744345
+      },
+      {
+        "executionId": "4f59aecc-1cb8-4397-99b9-fd6b518510a0",
+        "chatSessionId": "sess_6e6ddce3-e03d-4e49-ad8f-2e864d77f1a6",
+        "timestamp": 1792899891442
+      },
+      {
+        "executionId": "4f59aecc-1cb8-4397-99b9-fd6b518510a0",
+        "chatSessionId": "sess_6e6ddce3-e03d-4e49-ad8f-2e864d77f1a6",
+        "timestamp": 1792900175760
+      }
+    ],
+    "8. Storage layer (SQLite and artifacts)": [
+      {
+        "executionId": "4f59aecc-1cb8-4397-99b9-fd6b518510a0",
+        "chatSessionId": "sess_6e6ddce3-e03d-4e49-ad8f-2e864d77f1a6",
+        "timestamp": 1792883744385
+      },
+      {
+        "executionId": "4f59aecc-1cb8-4397-99b9-fd6b518510a0",
+        "chatSessionId": "sess_6e6ddce3-e03d-4e49-ad8f-2e864d77f1a6",
+        "timestamp": 1792900180179
+      },
+      {
+        "executionId": "4f59aecc-1cb8-4397-99b9-fd6b518510a0",
+        "chatSessionId": "sess_6e6ddce3-e03d-4e49-ad8f-2e864d77f1a6",
+        "timestamp": 1792901103258
+      }
+    ],
+    "9. Pipeline controller (`enroll` and `verify`)": [
+      {
+        "executionId": "4f59aecc-1cb8-4397-99b9-fd6b518510a0",
+        "chatSessionId": "sess_6e6ddce3-e03d-4e49-ad8f-2e864d77f1a6",
+        "timestamp": 1792883744422
+      },
+      {
+        "executionId": "4f59aecc-1cb8-4397-99b9-fd6b518510a0",
+        "chatSessionId": "sess_6e6ddce3-e03d-4e49-ad8f-2e864d77f1a6",
+        "timestamp": 1792901107277
+      },
+      {
+        "executionId": "4f59aecc-1cb8-4397-99b9-fd6b518510a0",
+        "chatSessionId": "sess_6e6ddce3-e03d-4e49-ad8f-2e864d77f1a6",
+        "timestamp": 1792901710107
+      }
+    ],
+    "10. Interactive CLI (`fpv enroll` / `fpv verify`)": [
+      {
+        "executionId": "4f59aecc-1cb8-4397-99b9-fd6b518510a0",
+        "chatSessionId": "sess_6e6ddce3-e03d-4e49-ad8f-2e864d77f1a6",
+        "timestamp": 1792883744465
+      },
+      {
+        "executionId": "4f59aecc-1cb8-4397-99b9-fd6b518510a0",
+        "chatSessionId": "sess_6e6ddce3-e03d-4e49-ad8f-2e864d77f1a6",
+        "timestamp": 1792901714001
+      },
+      {
+        "executionId": "4f59aecc-1cb8-4397-99b9-fd6b518510a0",
+        "chatSessionId": "sess_6e6ddce3-e03d-4e49-ad8f-2e864d77f1a6",
+        "timestamp": 1792902208876
+      }
+    ],
+    "11. Batch evaluation harness": [
+      {
+        "executionId": "4f59aecc-1cb8-4397-99b9-fd6b518510a0",
+        "chatSessionId": "sess_6e6ddce3-e03d-4e49-ad8f-2e864d77f1a6",
+        "timestamp": 1792883744503
+      },
+      {
+        "executionId": "4f59aecc-1cb8-4397-99b9-fd6b518510a0",
+        "chatSessionId": "sess_6e6ddce3-e03d-4e49-ad8f-2e864d77f1a6",
+        "timestamp": 1792902212728
+      },
+      {
+        "executionId": "4f59aecc-1cb8-4397-99b9-fd6b518510a0",
+        "chatSessionId": "sess_6e6ddce3-e03d-4e49-ad8f-2e864d77f1a6",
+        "timestamp": 1792945921321
+      }
+    ],
+    "12. Threshold calibration, config freeze and test-split baseline": [
+      {
+        "executionId": "4f59aecc-1cb8-4397-99b9-fd6b518510a0",
+        "chatSessionId": "sess_6e6ddce3-e03d-4e49-ad8f-2e864d77f1a6",
+        "timestamp": 1792883744549
+      },
+      {
+        "executionId": "4f59aecc-1cb8-4397-99b9-fd6b518510a0",
+        "chatSessionId": "sess_6e6ddce3-e03d-4e49-ad8f-2e864d77f1a6",
+        "timestamp": 1792945925413
+      },
+      {
+        "executionId": "4f59aecc-1cb8-4397-99b9-fd6b518510a0",
+        "chatSessionId": "sess_6e6ddce3-e03d-4e49-ad8f-2e864d77f1a6",
+        "timestamp": 1792956413526
+      }
+    ]
+  }
+}

@@ -1,0 +1,6 @@
+# Host-side development dependencies: the data_preprocessing scripts plus the fpv unit tests
+# that run without the toolchain. The full pipeline stack (pyfing, TensorFlow, NFIQ 2, Bozorth3)
+# only runs in the container; see requirements-pipeline.lock and src/fpv/README.md.
+-r requirements.txt
+pyyaml==6.0.3
+pytest==9.1.1

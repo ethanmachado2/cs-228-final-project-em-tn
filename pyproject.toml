@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fpv"
+version = "0.1.0"
+description = "Deterministic SOCOFing fingerprint enrollment/verification pipeline (NFIQ 2, pyfing, Bozorth3)"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+# Runtime pins live in requirements-pipeline.lock (installed in the container).
+dependencies = ["pyyaml"]
+
+[project.scripts]
+fpv = "fpv.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+fpv = ["migrations/*.sql"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-ra"
+markers = [
+    "toolchain: requires the NFIQ 2 / Bozorth3 binaries and the pipeline Python stack (run in the container)",
+    "dataset: requires data/raw and data/processed/dataset_splits.csv",
+]

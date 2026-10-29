@@ -1,0 +1,113 @@
+# fpv pipeline configuration, schema v1 (FROZEN by `fpv calibrate`; do not edit by hand).
+# Calibrated from cs_64b26a53f92a train + validation scores; see provenance.
+# Everything except `provenance` is hashed into config_set_id. `fpv evaluate --split test` runs once
+# per config_set_id (test_report_<config_set_id>.json).
+schema_version: 1
+frozen: true
+thresholds:
+  nfiq2_min: 5
+  minutiae_min: 12
+  bozorth3_match: 43
+session:
+  max_presentations: 3
+quality:
+  nfiq2_upscale: 3.0
+preprocess:
+  max_attempts: 3
+  attempts:
+  - attempt_no: 1
+    name: traditional
+    segmentation: GMFS
+    orientation: GBFOE
+    frequency: XSFFE
+    enhancement: GBFEN
+    resample: 3.0
+  - attempt_no: 2
+    name: deep
+    segmentation: SUFS
+    orientation: SNFOE
+    frequency: SNFFE
+    enhancement: SNFEN
+    resample: 3.0
+  - attempt_no: 3
+    name: deep_boost
+    segmentation: SUFS
+    orientation: SNFOE
+    frequency: SNFFE
+    enhancement: SNFEN
+    resample: 3.0
+    clahe:
+      clip_limit: 2.0
+      tile: 8
+    sbmex_overrides:
+      minimum_background_distance: 4
+adapter:
+  version: xyt-adapter/1
+evaluation:
+  seed: 42
+  impostors_per_probe: 5
+calibration:
+  target_fmrs:
+  - 0.001
+  - 0.01
+  primary_target_fmr: 0.01
+  operating_points:
+  - target_fmr: 0.001
+    bozorth3_match: 60
+    low_confidence: false
+  - target_fmr: 0.01
+    bozorth3_match: 43
+    low_confidence: false
+tools:
+  nfiq2: 2.3.0
+  nbis: 5.0.0
+  pyfing: 0.7.3
+  tensorflow: 2.21.0
+  keras: 3.15.1
+  opencv: 5.0.0
+paths:
+  raw: data/raw
+  splits: data/processed/dataset_splits.csv
+  exclusions: data/quality_reports/duplicate_exclusions.csv
+  templates: data/templates
+  probes: data/probes
+  db: data/db/fpv.sqlite
+  reports: data/quality_reports
+provenance:
+  calibrated_at: '2026-10-25T18:50:15+00:00'
+  pipeline_version: 0.1.0+g61e588a.dirty
+  source_config: configs/pipeline.v1.yaml
+  source_config_set_id: cs_64b26a53f92a
+  source_runs:
+  - split: train
+    dir: data/quality_reports/eval/train/cs_64b26a53f92a
+    trials: 205938
+    enrollments: 4180
+    sha256:
+      scores.csv: 89fc60ae60198cbe81e4d1b81ec1aed066c82f4b3f58d5ffdc72c03f42e52fad
+      enrollments.csv: 9f6bbb41bde45501fdeb245157532989d009da7c4a11813ed796007dce570e2f
+  - split: validation
+    dir: data/quality_reports/eval/validation/cs_64b26a53f92a
+    trials: 44268
+    enrollments: 898
+    sha256:
+      scores.csv: 07425e8ac7046fe06e4170ea67e0bda79c53186f0c00482ffd590469eae9387e
+      enrollments.csv: a68ff611caecdedd07c1d0b25c781a08ffdc678968c44001f1df359faac989cb
+  calibration_report: data/quality_reports/calibration/cs_64b26a53f92a/calibration.md
+  operating_points:
+  - target_fmr: 0.001
+    bozorth3_match: 60
+    fmr: 0.0009231039737428203
+    fnmr: 0.06858933864619272
+    impostor: 204744
+    genuine: 41158
+  - target_fmr: 0.01
+    bozorth3_match: 43
+    fmr: 0.008850076192708944
+    fnmr: 0.03741678410029642
+    impostor: 204744
+    genuine: 41158
+  decisions:
+    primary operating point: FMR 0.01 -> bozorth3_match 43
+    nfiq2_min: 5 (unchanged)
+    minutiae_min: 12 (unchanged)

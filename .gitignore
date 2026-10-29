@@ -228,8 +228,26 @@ data/processed/
 # Standardized fingerprint images
 data/standardized/
 
-# Data quality reports and generated CSV files
-data/quality_reports/
+# Data quality reports and generated CSV files.
+# Ignored by default (the eval outputs alone are ~2 GB). The small fpv reports that
+# configs/pipeline.v1.frozen.yaml points to in its provenance are tracked.
+data/quality_reports/*
+!data/quality_reports/baseline_v1.md
+!data/quality_reports/test_report_*.json
+!data/quality_reports/calibration/
+!data/quality_reports/characterization/
+data/quality_reports/characterization/*
+!data/quality_reports/characterization/summary.md
+!data/quality_reports/characterization/findings.md
+# Test-split DET plot and summary embedded in baseline_v1.md (scores.csv and store/ stay ignored)
+!data/quality_reports/eval/
+data/quality_reports/eval/*
+!data/quality_reports/eval/test/
+data/quality_reports/eval/test/*
+!data/quality_reports/eval/test/cs_abee4830796d/
+data/quality_reports/eval/test/cs_abee4830796d/*
+!data/quality_reports/eval/test/cs_abee4830796d/det.png
+!data/quality_reports/eval/test/cs_abee4830796d/summary.md
 
 # Kaggle API credentials
 kaggle.json
@@ -240,3 +258,8 @@ kaggle.json
 # Local temporary files
 *.tmp
 *.bak
+
+# Pipeline artifacts (fpv): enrolled templates, SQLite store, verification probes
+data/templates/
+data/db/
+data/probes/

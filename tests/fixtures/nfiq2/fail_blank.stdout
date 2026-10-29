@@ -1,0 +1,2 @@
+"Filename",FingerCode,QualityScore,"OptionalError",Quantized,Resampled,UniformImage,EmptyImageOrContrastTooLow,FingerprintImageWithMinutiae,SufficientFingerprintForeground
+"/tmp/blank.png",0,NA,"Error: NFIQ2 computeUnifiedQualityScore returned an error code: All image rows appear to be blank",0,0,NA,NA,NA,NA
