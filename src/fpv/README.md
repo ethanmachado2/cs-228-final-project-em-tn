@@ -285,8 +285,10 @@ extract         4  17.9    19.4
 ...
 ```
 
-Step 7. Find rejected and failed stages. The four runs above have none, so this example uses an
-evaluation store (one per finger position under `data/quality_reports/eval/<split>/<config_set_id>/store/`):
+Step 7. Find rejected and failed stages. The four runs above have none, so this example uses the
+test-split evaluation. An evaluation writes one store per finger position under
+`data/quality_reports/eval/<split>/<config_set_id>/store/<Hand>_<finger>/`, so the outputs in steps 7
+and 8 cover Left index only, one of 10 stores. The full test-split totals follow step 8.
 ```bash
 sqlite3 -header -column "file:data/quality_reports/eval/test/cs_abee4830796d/store/Left_index/fpv.sqlite?immutable=1"
 ```
@@ -321,7 +323,7 @@ run       seq  stage           attempt_no  outcome   nfiq2  minutiae  error_type
 ...
 ```
 
-Step 8. Count genuine and impostor decisions in the same store (the confusion matrix behind FMR and FNMR):
+Step 8. Count genuine and impostor decisions in the same Left index store (that finger's confusion matrix):
 ```sql
 SELECT CASE ground_truth_genuine WHEN 1 THEN 'genuine' ELSE 'impostor' END AS trial,
        decision, count(*) AS n, min(score) AS min_score, max(score) AS max_score
@@ -337,6 +339,34 @@ genuine   NO_MATCH  16    10         42
 impostor  MATCH     32    43         76
 impostor  NO_MATCH  3551  0          42
 ```
+
+Full test split. Running step 8 against each of the 10 stores and adding the counts gives the
+confusion matrix behind the baseline's FMR and FNMR (threshold 43):
+
+| trial | decision | n | min_score | max_score |
+|---|---|---:|---:|---:|
+| genuine | MATCH | 6933 | 43 | 1181 |
+| genuine | NO_MATCH | 283 | 0 | 42 |
+| impostor | MATCH | 364 | 43 | 132 |
+| impostor | NO_MATCH | 35381 | 0 | 42 |
+
+These counts match `data/quality_reports/baseline_v1.md`, which reports the overall test-split metrics:
+
+| metric | value | 95% CI | counts |
+|---|---:|---|---|
+| FTE | 1.12% | | 10 of 896 Real enrollment samples |
+| FTA | 1.79% | | 132 of 7360 Altered probes rejected |
+| FMR | 1.02% | [0.92%, 1.13%] | 364 of 35745 impostor comparisons |
+| FNMR | 3.92% | [3.50%, 4.39%] | 283 of 7216 genuine comparisons |
+| generalized FMR | 1.00% | | (1 - FTA) x FMR |
+| generalized FNMR | 5.64% | | FTA + (1 - FTA) x FNMR |
+
+The rates exclude 407 NOT_ENROLLED trials (the claimed finger failed to enroll) and 0 ERROR trials.
+FTA counts probes, not runs. Each Altered probe is verified in 6 trials (1 genuine, 5 impostor), so
+`runs` holds one verify row per trial. A rejected probe adds several rejected runs, so don't compute
+FTA from the step 7 status counts: summed over the 10 stores they show 792 rejected verify runs for
+the 132 rejected probes. `baseline_v1.md` also breaks the rates down by alteration and difficulty.
+
 ## 7. Reproduce the baseline
 
 The committed baseline is `data/quality_reports/baseline_v1.md` (config `cs_abee4830796d`).
