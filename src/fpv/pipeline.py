@@ -231,7 +231,8 @@ def _error_text(exc: BaseException) -> str:
 class PipelineController:
     def __init__(self, config: PipelineConfig, repo: Repository, catalog: Catalog,
                  stages: Stages | None = None, clock: Clock | None = None,
-                 probe_cache: ProbeCache | None = None, *, pipeline_version: str | None = None) -> None:
+                 probe_cache: ProbeCache | None = None, *, pipeline_version: str | None = None,
+                 control_mode: str = "controller") -> None:
         self._conf = config
         self._repo = repo
         self._catalog = catalog
@@ -239,6 +240,7 @@ class PipelineController:
         self._clock: Clock = clock if clock is not None else SystemClock()
         self._probe_cache = probe_cache
         self.pipeline_version = pipeline_version or _pipeline_version()
+        self.control_mode = control_mode  # phase 2: "controller" or "llm_routed" (runs.control_mode)
 
     @property
     def config(self) -> PipelineConfig:
@@ -276,7 +278,7 @@ class PipelineController:
             run_id=run.run_id, session_id=session_id or str(uuid.uuid4()),
             presentation_no=presentation_no, operation=operation, identity=identity, sample_id=None,
             pipeline_version=self.pipeline_version, config_set_id=self._conf.config_set_id,
-            started_at=self._clock.utc_now_iso(), control_mode="controller", orchestrator_vision="off"))
+            started_at=self._clock.utc_now_iso(), control_mode=self.control_mode, orchestrator_vision="off"))
         finished = False
         try:
             try:

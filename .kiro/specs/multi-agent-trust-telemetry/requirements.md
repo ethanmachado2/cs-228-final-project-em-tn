@@ -1,5 +1,7 @@
 # Requirements Document: Multi-Agent Trust Telemetry (Phase 2)
 
+> **Superseded for implementation by `.kiro/specs/a2a-agents-telemetry/`** (genuine-vs-altered framing from `CS228-project-plan.md`, `controller`/`llm_routed` arms only). Kept as a design reference.
+
 > **Status: design reference only. Not scheduled for implementation.** Phase 2 starts after the `fingerprint-pipeline-baseline` spec (phase 1) is complete and its frozen baseline report exists. Criteria here guide decisions and may be refined when phase 2 is scheduled.
 
 ## Introduction

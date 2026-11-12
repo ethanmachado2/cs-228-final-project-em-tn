@@ -407,6 +407,187 @@ docker compose run --rm fpv fpv evaluate --split test --workers 5
 
 Only the small reports are tracked in git. The `eval/` directories (about 2 GB) are not.
 
+## 8. Phase 2: always-on A2A agents and telemetry
+
+Design and requirements: `.kiro/specs/a2a-agents-telemetry/`. Each phase 1 stage runs as its own
+A2A server (spec 1.0, JSON-RPC, `a2a-sdk` 1.3.0), and a controller agent runs the unchanged
+`PipelineController` over them:
+
+| Service | Skills | Notes |
+|---|---|---|
+| `controller` | `enroll`, `verify` | Owns `data/a2a/` (its own SQLite store, templates, probes) and `data/uploads/` |
+| `quality` | `assess_quality`, `quality_after` | NFIQ 2 |
+| `preprocess` | `preprocess` | pyfing; loads TensorFlow once at startup |
+| `extract` | `extract` | SBMEX |
+| `adapter` | `adapt` | `.xyt` adapter |
+| `matcher` | `match` | Bozorth3 |
+
+Every agent listens on port 8080 inside its own container, on the `a2a` network, which has no
+internet access. No port is published to the host.
+
+### Start, stop, logs
+
+```bash
+mkdir -p data/telemetry data/a2a data/uploads data/labels   # create the writable mounts as your user first
+export FPV_IMAGE_DIGEST=$(docker image inspect -f '{{.Id}}' fpv-toolchain:phase1)   # recorded on every hop
+docker compose up -d --wait        # all agents; --wait returns once every healthcheck passes (warm-up done)
+docker compose ps                  # every agent "(healthy)"
+docker compose logs -f controller  # agent logs (warnings only by default; FPV_LOG_LEVEL=info for more)
+docker compose restart preprocess  # agents restart on failure, and warm up again
+docker compose down                # stop everything (data/ stays)
+```
+
+Agents stay up between presentations, so TensorFlow, the NFIQ 2 setup and the SQLite store are not
+reloaded per sample. After `up`, each stage agent calls each of its skills once on itself, with
+`warmup: true` and a synthetic image. Its `/healthz` endpoint returns 200 only after that.
+
+### Send presentations
+
+The `harness` service (compose profile `harness`) runs on the `a2a` network, and it is the only
+service that mounts `data/labels/`:
+
+```bash
+docker compose run --rm harness python -m fpv.agents.client enroll data/raw/Real/1__M_Left_index_finger.BMP 1 Left index
+docker compose run --rm harness python -m fpv.agents.client verify \
+    data/raw/Altered/Altered-Easy/1__M_Left_index_finger_CR.BMP 1 Left index --trial-id demo
+# {"state": "TASK_STATE_COMPLETED", "status": "MATCH", "score": 296, "run_id": ..., ...}
+docker compose run --rm harness pytest -m live tests/test_agents_live.py   # cards, health, no egress, warm-up
+```
+
+The controller receives only the image bytes, with no filename, plus the claim. It stores the bytes
+as `data/uploads/<sha256>.bmp`, so its runs have no ground truth (`ground_truth_genuine` is NULL).
+
+A2A task states:
+
+| Run status | Controller task state |
+|---|---|
+| `REJECTED_QUALITY` / `REJECTED_MINUTIAE`, presentations left | `TASK_STATE_INPUT_REQUIRED`. Send the next image as a new message with the same `taskId` and `contextId` |
+| the same, at `session.max_presentations` | `TASK_STATE_REJECTED` with `task_reason: presentation_limit` |
+| any other status | `TASK_STATE_COMPLETED`, with the outcome in the artifact |
+| invalid claim or missing sample | `TASK_STATE_REJECTED` with `error_code: invalid_input` |
+
+Stage agents end `TASK_STATE_COMPLETED`, `TASK_STATE_FAILED` (with `error_code`
+`nfiq2_tool_error`, `insufficient_minutiae`, `bozorth3_tool_error` or `stage_error`), or
+`TASK_STATE_REJECTED` (`invalid_input`, and the stage did not run).
+
+### Telemetry
+
+Every HTTP request is recorded twice: by the server (`side: "server"`) and by the client that sent
+it (`side: "client"`). Each process role has one append-only file, `data/telemetry/<role>.jsonl`
+(`controller`, `quality`, ..., `harness`). Raw A2A parts (images, `.xyt` files) are moved out of the
+stored bodies into `data/telemetry/blobs/<sha256>`, and `fpv.telemetry.restore(body, blobs_dir)` puts
+them back byte for byte. **These files hold fingerprint images. Do not commit or share them.**
+`data/telemetry/`, `data/labels/`, `data/uploads/` and `data/a2a/` are gitignored.
+
+| Field | Meaning |
+|---|---|
+| `kind`, `side`, `role`, `agent`, `peer` | `hop`; `server` or `client`; the writing process; this agent; the other end (`X-FPV-Agent` header) |
+| `t_wall`, `t_start_ns`, `t_end_ns`, `latency_ms` | UTC start, and `CLOCK_MONOTONIC` ns (shared by all containers on the host) |
+| `http_method`, `path`, `http_status`, `rpc_method`, `rpc_error` | HTTP and JSON-RPC envelope (`GET` = AgentCard discovery) |
+| `skill`, `task_id`, `context_id` | A2A skill and task identifiers |
+| `parent_task_id`, `trial_id`, `control_mode`, `warmup` | On stage hops: the controller task ID of the run, plus the harness's opaque trial ID |
+| `final_state`, `state_history`, `error_code` | Task state in the response; server side: every state the executor emitted |
+| `req_bytes`, `resp_bytes`, `req_parts`, `resp_parts` | HTTP body sizes, and part counts by kind (`raw`, `data`) |
+| `req_body`, `resp_body` | The JSON-RPC bodies, with raw parts as `{"$blob": sha256, "len": n}` |
+| `image_digest`, `schema_version` | `FPV_IMAGE_DIGEST`; record schema (1) |
+
+Query recipes (host `jq`):
+
+```bash
+# controller runs: one line per presentation
+jq -c 'select(.side=="server" and .rpc_method=="SendMessage") | {t_wall, skill, final_state, trial_id,
+       run: .resp_body.result.task | (.artifacts[0].parts[0].data // .status.message.parts[0].data) | {run_id, status, score}}' \
+   data/telemetry/controller.jsonl
+
+# the stage hop trail of one controller task (server side, in time order)
+T=<controller task_id>
+cat data/telemetry/{quality,preprocess,extract,adapter,matcher}.jsonl | jq -s -r --arg t "$T" \
+  'map(select(.side=="server" and .parent_task_id==$t)) | sort_by(.t_start_ns) | .[] |
+   [.agent, .skill, .final_state, (.latency_ms|floor), .req_bytes, .resp_bytes] | @tsv'
+
+# mean latency and bytes per skill, excluding warm-up
+cat data/telemetry/{quality,preprocess,extract,adapter,matcher}.jsonl | jq -s -r \
+  'map(select(.side=="server" and .rpc_method=="SendMessage" and (.warmup|not))) | group_by(.skill)[] |
+   [.[0].skill, length, (map(.latency_ms)|add/length|floor), (map(.resp_bytes)|add/length|floor)] | @tsv'
+```
+
+Set `FPV_TELEMETRY=off` on a service to disable capture. Capture is passive, so outputs do not
+change. The controller's SQLite store (`data/a2a/db/fpv.sqlite`) has the same schema and queries
+as section 6. Its `runs.control_mode` is `controller` for harness runs and `llm_routed` for
+orchestrator runs.
+
+### Labeled trials (arms A, B, C, C')
+
+| Arm | Probe | Claim |
+|---|---|---|
+| A | Real image | its own identity (ceiling: the probe is the enrolled image) |
+| B | Real image | another enrolled subject, same hand and finger (zero-effort impostor, the main control) |
+| C | Altered image | its own identity (altered genuine) |
+| C' | Altered image | another enrolled subject (altered impostor) |
+
+```bash
+docker compose run --rm harness fpv evaluate --backend a2a --split train --subjects 30 --per-arm 20
+# a2a: 70 enrollments, 80 trials (A 20, B 20, C 20, C' 20), seed 42 ... then counts per (arm, status)
+```
+
+The harness enrolls the claimed identities first, then sends the trials one at a time, in a seeded
+interleaving across arms. It uses `evaluation.seed` unless you pass `--seed`, and `--per-arm`
+defaults to 300. Before sending each trial, it appends the trial's label to
+`data/labels/labels.jsonl` (`trial_id`, `arm`, `genuine`, `alteration`, `difficulty`, `subject`,
+`probe`, `claim`, `split`, `warmup`). Only the random `trial_id` goes on the wire. Enrollments and
+the first 20 trials are flagged `warmup`.
+
+### Features and negative control
+
+```bash
+docker compose run --rm harness python -m fpv.telemetry_features export        # -> data/labels/features.csv
+docker compose run --rm harness python -m fpv.telemetry_features negative-control data/labels/features.csv
+# C vs B          t1 ...  t2 ...  t3 ...  oracle ...  t1+t2 ...
+# A random split  (should be ~0.5 for every tier)
+```
+
+`export` writes one row per non-warm-up controller run, with columns prefixed by group: `t1__`
+(sizes and timing), `t2__` (structure and lifecycle), `t3__` (content), `oracle__` (score and
+decision) and `cov__` (input bytes, width and height). The label columns are appended last.
+`negative-control` reports subject-grouped 5-fold CV AUC of an L1 logistic regression per tier.
+
+**Known confound.** SOCOFing Real BMPs are 24-bit (39,690 bytes) and Altered BMPs are 8-bit (10,966
+bytes) at the same 96×103 size, so C vs B is trivially separable by upload size in T1. Compare it
+with `cov__input_bytes` before you interpret T1.
+
+### Orchestrator (ADK + Gemini) for live demos
+
+```bash
+gcloud auth application-default login            # once; only this ADC file is mounted (read-only)
+# GOOGLE_CLOUD_PROJECT / GOOGLE_CLOUD_LOCATION (and optionally FPV_MODEL_ID) in .env (gitignored) or exported
+docker compose build orchestrator
+docker compose up -d --wait                       # now includes the orchestrator
+open http://127.0.0.1:8000                        # adk web: pick fpv_orchestrator, upload a print, follow the prompts
+docker compose run --rm --no-deps orchestrator python -m pytest -p no:cacheprovider tests/test_orchestrator.py
+```
+
+- The model (`FPV_MODEL_ID`, default `gemini-3.8-flash`) only routes. It collects the claim, has
+  the user confirm it, and calls `enroll` or `verify` on the controller (`control_mode=llm_routed`).
+- Uploaded images never reach Vertex AI. A callback swaps each one for a `[sample_ref: <sha256>]`
+  text before every model request.
+- Callbacks block unconfirmed or invalid claims, and replace replies that contradict the pipeline's
+  result. Model calls (tokens, latency, tool calls) and guardrail events go to
+  `data/telemetry/orchestrator.jsonl`.
+- `adk web` has no authentication, so it is published on `127.0.0.1` only. For a demo on a trusted
+  LAN, change the orchestrator's port line in `docker-compose.yml` to `"8000:8000"`, and change it
+  back afterwards.
+- The orchestrator is the only container with outbound access (the `egress` network).
+
+Scripted `llm_routed` arm: a seeded sample of the harness's trials (default 25 per arm, warm-up
+trials excluded), sent through the orchestrator. Run it after an `a2a` run on the same store, so
+that the claims are enrolled. Records with token counts go to `data/labels/llm_routed.jsonl`:
+
+```bash
+docker compose run --rm harness fpv evaluate --backend llm_routed --split train --per-arm 25
+docker compose run --rm harness python -m fpv.telemetry_features export
+docker compose run --rm harness python -m fpv.telemetry_features negative-control data/labels/features.csv --control-mode llm_routed
+```
+
 ## Notes
 
 - Don't open an evaluation's SQLite files from the host while `fpv evaluate` is running. SQLite's

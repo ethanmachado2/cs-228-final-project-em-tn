@@ -2,6 +2,36 @@
 #   GIT_COMMIT=$(git rev-parse --short HEAD)$(git diff --quiet HEAD || echo .dirty) docker compose build
 #   docker compose run --rm fpv fpv doctor
 #   docker compose run --rm fpv pytest -m toolchain
+#
+# Phase 2 always-on A2A agents (spec a2a-agents-telemetry, README "Phase 2"):
+#   export FPV_IMAGE_DIGEST=$(docker image inspect -f '{{.Id}}' fpv-toolchain:phase1)
+#   docker compose up -d                       # controller + five stage agents, restarted unless stopped
+#   docker compose run --rm harness <cmd>      # labeled trials / live tests from inside the a2a network
+#   docker compose down
+
+# Shared settings of every phase 2 agent (one toolchain image, one service per agent).
+x-agent: &agent
+  image: fpv-toolchain:phase1
+  user: fpv
+  working_dir: /app
+  restart: unless-stopped
+  networks: [a2a]
+  environment: &agent-env
+    FPV_TELEMETRY_DIR: /app/data/telemetry
+    FPV_IMAGE_DIGEST: ${FPV_IMAGE_DIGEST:-unknown}
+  volumes:
+    - ./data/telemetry:/app/data/telemetry
+    - ./src:/app/src:ro
+    - ./configs:/app/configs:ro
+  healthcheck:
+    # 200 once the agent's startup warm-up calls are done (fpv.agents.serve /healthz).
+    test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8080/healthz', timeout=3)"]
+    interval: 5s
+    timeout: 5s
+    retries: 3
+    start_period: 120s
+    start_interval: 2s
+
 services:
   fpv:
     build:
@@ -30,3 +60,114 @@ services:
       - ./tests:/app/tests
       - ./configs:/app/configs
       - ./scripts:/app/scripts
+
+  # ------------------------------------------------------------------ phase 2 A2A agents
+  quality:
+    <<: *agent
+    command: ["python", "-m", "fpv.agents.serve", "quality"]
+
+  preprocess:
+    <<: *agent
+    command: ["python", "-m", "fpv.agents.serve", "preprocess"]
+
+  extract:
+    <<: *agent
+    command: ["python", "-m", "fpv.agents.serve", "extract"]
+
+  adapter:
+    <<: *agent
+    command: ["python", "-m", "fpv.agents.serve", "adapter"]
+
+  matcher:
+    <<: *agent
+    command: ["python", "-m", "fpv.agents.serve", "matcher"]
+
+  controller:
+    <<: *agent
+    command: ["python", "-m", "fpv.agents.serve", "controller"]
+    environment:
+      <<: *agent-env
+      # Its own store, so it never shares an SQLite file with the phase 1 `fpv` CLI (Req 4.6).
+      FPV_STORE_DIR: /app/data/a2a
+      FPV_UPLOADS_DIR: /app/data/uploads
+    volumes:
+      - ./data/telemetry:/app/data/telemetry
+      - ./data/a2a:/app/data/a2a
+      - ./data/uploads:/app/data/uploads
+      - ./data/raw:/app/data/raw:ro
+      - ./data/processed:/app/data/processed:ro
+      - ./data/quality_reports:/app/data/quality_reports:ro
+      - ./src:/app/src:ro
+      - ./configs:/app/configs:ro
+    depends_on:
+      quality: {condition: service_healthy}
+      preprocess: {condition: service_healthy}
+      extract: {condition: service_healthy}
+      adapter: {condition: service_healthy}
+      matcher: {condition: service_healthy}
+
+  # ADK + Gemini front door (Task 8): http://127.0.0.1:8000 (adk web, no auth: localhost only).
+  # For a trusted LAN demo, change the port line to "8000:8000" (README section 8).
+  orchestrator:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.orchestrator
+      args:
+        UID: ${FPV_UID:-1000}
+        GID: ${FPV_GID:-1000}
+    image: fpv-orchestrator:phase2
+    user: fpv
+    working_dir: /app
+    restart: unless-stopped
+    networks: [a2a, egress]   # the only service with outbound access (Vertex AI)
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      FPV_MODEL_ID: ${FPV_MODEL_ID:-gemini-3.8-flash}
+      GOOGLE_GENAI_USE_ENTERPRISE: ${GOOGLE_GENAI_USE_ENTERPRISE:-TRUE}
+      GOOGLE_GENAI_USE_VERTEXAI: ${GOOGLE_GENAI_USE_VERTEXAI:-TRUE}
+      GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT:-}
+      GOOGLE_CLOUD_LOCATION: ${GOOGLE_CLOUD_LOCATION:-global}
+      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/adc.json
+      FPV_CONTROLLER_URL: http://controller:8080/
+      FPV_TELEMETRY_DIR: /app/data/telemetry
+      FPV_ORCHESTRATOR_UPLOADS: /app/data/orchestrator/uploads
+      FPV_IMAGE_DIGEST: ${FPV_ORCHESTRATOR_DIGEST:-unknown}
+    volumes:
+      - ./data/telemetry:/app/data/telemetry
+      - ./data/orchestrator:/app/data/orchestrator
+      - ./src:/app/src:ro
+      - ./src/fpv_orchestrator:/app/agents/fpv_orchestrator:ro
+      - ./tests:/app/tests:ro
+      - ./pyproject.toml:/app/pyproject.toml:ro
+      # Only the ADC file, read-only; not the rest of ~/.config/gcloud (gcloud CLI credentials).
+      - ${HOME}/.config/gcloud/application_default_credentials.json:/run/secrets/adc.json:ro
+    depends_on:
+      controller: {condition: service_healthy}
+
+  # Labeled experiment driver, the only service that mounts data/labels (Req 6.5).
+  harness:
+    <<: *agent
+    profiles: [harness]
+    restart: "no"
+    command: ["bash"]
+    healthcheck: {disable: true}
+    volumes:
+      - ./data/telemetry:/app/data/telemetry
+      - ./data/labels:/app/data/labels
+      - ./data/raw:/app/data/raw:ro
+      - ./data/processed:/app/data/processed:ro
+      - ./data/quality_reports:/app/data/quality_reports:ro
+      - ./src:/app/src:ro
+      - ./tests:/app/tests:ro
+      - ./configs:/app/configs:ro
+      - ./scripts:/app/scripts:ro
+    depends_on:
+      controller: {condition: service_healthy}
+
+networks:
+  # Agents only: no route to the internet (Req 6.3).
+  a2a:
+    internal: true
+  # Outbound access, reserved for the orchestrator (Task 8).
+  egress: {}

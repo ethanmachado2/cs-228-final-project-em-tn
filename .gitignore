@@ -263,3 +263,9 @@ kaggle.json
 data/templates/
 data/db/
 data/probes/
+# Phase 2 (a2a-agents-telemetry): raw A2A telemetry, blobs, uploads and labels hold biometric data
+data/telemetry/
+data/labels/
+data/uploads/
+data/a2a/
+data/orchestrator/

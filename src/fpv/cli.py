@@ -649,11 +649,38 @@ def _positive_int(text: str) -> int:
     return value
 
 
+def cmd_evaluate_a2a(args: argparse.Namespace, conf: cfgmod.PipelineConfig, out: Output) -> int:
+    """Labeled arm trials through the controller agent (phase 2, spec a2a-agents-telemetry Req 7)."""
+    from fpv import arms
+    from fpv.catalog import Catalog
+
+    ev = conf.raw.get("evaluation", {}) or {}
+    seed = int(ev.get("seed", 42)) if args.seed is None else args.seed
+    if args.backend == "llm_routed":  # reuses the a2a harness's labels and enrollments (Req 10.1)
+        counts = arms.run_llm_routed(conf, labels_path=args.labels, out_path=args.labels.parent / "llm_routed.jsonl",
+                                     per_arm=args.per_arm, seed=seed, url=args.orchestrator_url, out=out)
+        for line in arms.summary_lines(counts):
+            out(line)
+        return EXIT_OK
+    catalog = Catalog.load(conf.path("splits"), conf.path("exclusions"), conf.path("raw"))
+    plan = arms.build_arm_plan(catalog, args.split, seed, int(ev.get("impostors_per_probe", 5)), args.per_arm,
+                               args.subjects)
+    out(f"a2a: {len(plan.enrollments)} enrollments, {len(plan.trials)} trials "
+        f"({', '.join(f'{a} {sum(t.arm == a for t in plan.trials)}' for a in arms.ARMS)}), seed {seed}")
+    counts = arms.run_a2a(conf, plan, labels_path=args.labels, out=out)
+    for line in arms.summary_lines(counts):
+        out(line)
+    return EXIT_OK
+
+
 def cmd_evaluate(args: argparse.Namespace, conf: cfgmod.PipelineConfig, out: Output) -> int:
     """Batch evaluation of one split through the pipeline controller (Req 13)."""
     from fpv.catalog import Catalog
     from fpv.evaluate import evaluate
 
+    if args.backend in ("a2a", "llm_routed"):
+        args.per_arm = args.per_arm or (300 if args.backend == "a2a" else 25)
+        return cmd_evaluate_a2a(args, conf, out)
     test_split = args.split == "test"
     previous = check_test_split(conf, args) if test_split else None
     if test_split and args.subjects is not None:
@@ -773,6 +800,16 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--force", action="store_true",
                    help="test split only: run again although test_report_<config_set_id>.json exists "
                         "(recorded in the report)")
+    p.add_argument("--backend", choices=("local", "a2a", "llm_routed"), default="local",
+                   help="local: phase 1 in-process baseline (default); a2a: arms A/B/C/C' through the controller "
+                        "agent; llm_routed: a sample of the a2a trials through the orchestrator (both: run from the "
+                        "harness service)")
+    p.add_argument("--per-arm", type=_positive_int, default=None,
+                   help="trials per arm (default 300 for a2a, 25 for llm_routed)")
+    p.add_argument("--orchestrator-url", default="http://orchestrator:8000",
+                   help="llm_routed: the orchestrator's ADK server")
+    p.add_argument("--labels", type=Path, default=Path("data/labels/labels.jsonl"),
+                   help="a2a: label file to append to (default data/labels/labels.jsonl)")
     p.set_defaults(func=cmd_evaluate)
 
     p = sub.add_parser("calibrate", help="choose thresholds from train + validation scores; writes the calibration "

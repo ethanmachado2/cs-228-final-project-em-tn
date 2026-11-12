@@ -28,4 +28,5 @@ addopts = "-ra"
 markers = [
     "toolchain: requires the NFIQ 2 / Bozorth3 binaries and the pipeline Python stack (run in the container)",
     "dataset: requires data/raw and data/processed/dataset_splits.csv",
+    "live: requires the phase 2 agents (docker compose up -d); run from the harness container",
 ]

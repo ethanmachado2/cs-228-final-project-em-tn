@@ -1,0 +1,25 @@
+# syntax=docker/dockerfile:1
+#
+# fpv orchestrator image (phase 2, spec a2a-agents-telemetry Task 8): Google ADK + a2a-sdk, no
+# pipeline toolchain. It imports only fpv.agents.client, fpv.agents.codec, fpv.telemetry and
+# fpv.types from the bind-mounted src/.
+FROM python:3.12-slim
+
+ARG UID=1000
+ARG GID=1000
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PYTHONPATH=/app/src
+
+COPY requirements-orchestrator.lock /tmp/requirements-orchestrator.lock
+RUN pip install --require-hashes --no-deps --only-binary=:all: -r /tmp/requirements-orchestrator.lock \
+ && pip check \
+ && rm /tmp/requirements-orchestrator.lock
+
+RUN groupadd -g "${GID}" fpv && useradd -m -u "${UID}" -g "${GID}" -s /bin/bash fpv
+WORKDIR /app
+USER fpv
+CMD ["adk", "web", "/app/agents", "--host", "0.0.0.0", "--port", "8000"]
