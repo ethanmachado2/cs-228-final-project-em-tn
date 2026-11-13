@@ -269,3 +269,6 @@ data/labels/
 data/uploads/
 data/a2a/
 data/orchestrator/
+
+# macOS Finder metadata
+.DS_Store

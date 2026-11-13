@@ -50,17 +50,18 @@ class Session:
         app = serve.build_app("controller", handlers, writer=self.writer, url=URL)
         self.client = A2AClient(URL, "controller", agent="harness", writer=TelemetryWriter(tmp_path / "tel", "harness"),
                                 transport=httpx.ASGITransport(app=app))
-        self.loop = asyncio.new_event_loop()
+        # Runner.close cancels the server's still-pending A2A tasks (input-required sessions) before closing the loop
+        self.loop = asyncio.Runner()
 
     def send(self, skill, data, user=1, hand="Left", finger="index", task=None, **meta):
-        t = self.loop.run_until_complete(self.client.call(
+        t = self.loop.run(self.client.call(
             sample_payload(data, user, hand, finger), {"skill": skill, **meta},
             task_id=task.id if task else None, context_id=task.context_id if task else None))
         state, p = result_payload(t)
         return t, state, p.data
 
     def close(self):
-        self.loop.run_until_complete(self.client.aclose())
+        self.loop.run(self.client.aclose())
         self.loop.close()
 
 

@@ -1,10 +1,11 @@
 # Phase 1 runtime. Usage:
-#   GIT_COMMIT=$(git rev-parse --short HEAD)$(git diff --quiet HEAD || echo .dirty) docker compose build
+#   GIT_COMMIT=$(git rev-parse --short HEAD)$(git diff --quiet HEAD || echo .dirty) docker compose --profile toolchain build
 #   docker compose run --rm fpv fpv doctor
 #   docker compose run --rm fpv pytest -m toolchain
 #
 # Phase 2 always-on A2A agents (spec a2a-agents-telemetry, README "Phase 2"):
-#   export FPV_IMAGE_DIGEST=$(docker image inspect -f '{{.Id}}' fpv-toolchain:phase1)
+#   FPV_IMAGE_DIGEST=$(docker image inspect -f '{{.Id}}' fpv-toolchain:phase1) in .env (not a shell export,
+#   or a shell without it changes the config and Compose recreates every agent)
 #   docker compose up -d                       # controller + five stage agents, restarted unless stopped
 #   docker compose run --rm harness <cmd>      # labeled trials / live tests from inside the a2a network
 #   docker compose down
@@ -34,6 +35,8 @@ x-agent: &agent
 
 services:
   fpv:
+    # One-shot service: kept out of `docker compose up` (it exits, which fails `--wait`); `run fpv` still works.
+    profiles: [toolchain]
     build:
       context: .
       dockerfile: docker/Dockerfile
@@ -90,6 +93,8 @@ services:
       # Its own store, so it never shares an SQLite file with the phase 1 `fpv` CLI (Req 4.6).
       FPV_STORE_DIR: /app/data/a2a
       FPV_UPLOADS_DIR: /app/data/uploads
+      # uvicorn startup lines in `docker compose logs`; access log stays off, so no per-request lines.
+      FPV_LOG_LEVEL: ${FPV_LOG_LEVEL:-info}
     volumes:
       - ./data/telemetry:/app/data/telemetry
       - ./data/a2a:/app/data/a2a

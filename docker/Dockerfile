@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 #
 # fpv toolchain image (phase 1): NFIQ 2 v2.3.0 + NBIS 5.0.0 Bozorth3 + Python 3.12 / pyfing 0.7.3.
-# Build:  docker compose build            (or: docker build -f docker/Dockerfile .)
+# Build:  docker compose --profile toolchain build   (or: docker build -f docker/Dockerfile .)
 # All downloads come from official sources and are verified against pinned SHA-256 digests.
 
 ############################

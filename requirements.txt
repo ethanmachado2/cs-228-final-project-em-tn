@@ -1,4 +1,5 @@
 kaggle
+six  # kaggle 2.2.5 imports six but doesn't declare it as a dependency
 numpy
 pandas
 opencv-contrib-python-headless

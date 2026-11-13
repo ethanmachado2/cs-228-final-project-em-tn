@@ -47,7 +47,7 @@ Run the scripts in this order; each one reads the previous one's output. `fpv` n
 
 ```bash
 mkdir -p data/templates data/db data/probes        # create the writable mounts as your user first
-GIT_COMMIT=$(git rev-parse --short HEAD)$(git diff --quiet HEAD || echo .dirty) docker compose build
+GIT_COMMIT=$(git rev-parse --short HEAD)$(git diff --quiet HEAD || echo .dirty) docker compose --profile toolchain build
 docker compose run --rm fpv fpv doctor             # every check should say OK
 ```
 
@@ -429,13 +429,25 @@ internet access. No port is published to the host.
 
 ```bash
 mkdir -p data/telemetry data/a2a data/uploads data/labels   # create the writable mounts as your user first
-export FPV_IMAGE_DIGEST=$(docker image inspect -f '{{.Id}}' fpv-toolchain:phase1)   # recorded on every hop
+echo "FPV_IMAGE_DIGEST=$(docker image inspect -f '{{.Id}}' fpv-toolchain:phase1)" >> .env   # recorded on every hop
 docker compose up -d --wait        # all agents; --wait returns once every healthcheck passes (warm-up done)
 docker compose ps                  # every agent "(healthy)"
-docker compose logs -f controller  # agent logs (warnings only by default; FPV_LOG_LEVEL=info for more)
+tail -f data/telemetry/controller.jsonl   # live per-request activity (one JSON record per hop)
+docker compose logs -f controller  # uvicorn startup lines and warnings only (see below)
 docker compose restart preprocess  # agents restart on failure, and warm up again
 docker compose down                # stop everything (data/ stays)
 ```
+
+Testing notes:
+
+- Put `FPV_IMAGE_DIGEST` in `.env` (gitignored, next to `docker-compose.yml`) rather than exporting
+  it. A terminal without the export gives Compose `unknown` instead, which is a different config,
+  so `docker compose up` recreates every agent. Update the line after each image rebuild.
+- Agent logs are mostly empty while everything works. `fpv.agents.serve` runs uvicorn with
+  `access_log=False` and `log_level` from `FPV_LOG_LEVEL` (default `warning`). Successful requests
+  print nothing to stdout. Each agent writes its activity to `data/telemetry/<role>.jsonl` instead.
+- Only the controller passes `FPV_LOG_LEVEL` through (Compose default `info`, so you see startup
+  lines). The stage agents don't, so setting it in your shell does nothing for them.
 
 Agents stay up between presentations, so TensorFlow, the NFIQ 2 setup and the SQLite store are not
 reloaded per sample. After `up`, each stage agent calls each of its skills once on itself, with
@@ -561,6 +573,7 @@ with `cov__input_bytes` before you interpret T1.
 gcloud auth application-default login            # once; only this ADC file is mounted (read-only)
 # GOOGLE_CLOUD_PROJECT / GOOGLE_CLOUD_LOCATION (and optionally FPV_MODEL_ID) in .env (gitignored) or exported
 docker compose build orchestrator
+echo "FPV_ORCHESTRATOR_DIGEST=$(docker image inspect -f '{{.Id}}' fpv-orchestrator:phase2)" >> .env   # else telemetry records "unknown"; update after each rebuild
 docker compose up -d --wait                       # now includes the orchestrator
 open http://127.0.0.1:8000                        # adk web: pick fpv_orchestrator, upload a print, follow the prompts
 docker compose run --rm --no-deps orchestrator python -m pytest -p no:cacheprovider tests/test_orchestrator.py
@@ -676,7 +689,7 @@ CSVs generated on Windows before that change still work.
 New-Item -ItemType Directory -Force data/templates, data/db, data/probes | Out-Null
 git diff --quiet HEAD; $dirty = if ($LASTEXITCODE -ne 0) { ".dirty" } else { "" }
 $env:GIT_COMMIT = "$(git rev-parse --short HEAD)$dirty"
-docker compose build
+docker compose --profile toolchain build
 docker compose run --rm fpv fpv doctor
 ```
 
